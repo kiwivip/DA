@@ -43,6 +43,7 @@ my $time_step = 1 ;
 
 my $num_month_ago = $time_step / 30 + 1;
 
+# 日期映射，因为单天日志里面涵盖2个日期，所以需要处理日志时间
 my %num2month = (
 	'01' => "Jan" , '02' => "Feb" , '03' => "Mar" , '04' => "Apr" ,
 	'05' => "May" , '06' => "Jun" , '07' => "Jul" , '08' => "Aug" ,
@@ -65,7 +66,7 @@ my $dsn = "DBI:mysql:database=$dj_db;host=$dj_host" ;
 my $dbh_dj = DBI -> connect($dsn, $usr, $psw, {'RaiseError' => 1} ) ;
 $dbh_dj -> do ("SET NAMES UTF8");
 
-=pod
+#=pod
 # --------------------------------------
 # 新增用户
 # --------------------------------------
@@ -124,9 +125,9 @@ for ( 1 .. $time_step + 1 )
         insert_redis_scalar('DJ::A::content::article_'.$key_day , $articles) if $articles ;
         
 }
-=cut
+#=cut
 
-=pod
+#=pod
 for ( 1 .. $num_month_ago)	
 {
         my $month_ago = $_ - 1 ;
@@ -152,7 +153,6 @@ for ( 1 .. $num_month_ago)
         }
         insert_redis_scalar( 'DJ::A::content::article_'.$month , $articles ) ;
 }
-
 
 #=cut
 
@@ -237,6 +237,11 @@ for ( 1 .. $time_step)
                                 $os = $ua -> {os};
                         }
                         $redis -> sadd( 'DJ::user::active::ip_'.$day_r , $ip.'_'.$os ) ;
+                        
+                        if ( $log =~ /MicroMessenger/i ) {
+                                $redis -> sadd( 'DJ::user::active::ip::weixin_'.$day_r , $ip.'_'.$os ) ;
+                        }
+                        
                 }
                 
                 # 记录活跃设备
@@ -245,8 +250,8 @@ for ( 1 .. $time_step)
                         $redis -> sadd( 'DJ::user::active::device_'.$day_r , $mId ) ;
                 }
                 
-                # 记录文章阅读数，自增，注意回滚时这个部分要注释掉
-                if ($log =~ /content\/view.*?content_id=(\d+) HTTP/)
+                #记录文章阅读数，自增，注意回滚时这个部分要注释掉
+                if ($log =~ /content\/view.*?content_id=(\d+)/)
                 {
                         my $contentId = $1 ;
                         $redis -> zincrby( 'DJ::content::view_'.$day_r , 1 , $contentId ) ;
@@ -257,13 +262,13 @@ for ( 1 .. $time_step)
         $redis -> set($file_name , 1) ;  # the log is scanned
     } # end of for(keys %hosts)
     
-        insert_redis_scalar( 'DJ::A::user::active::ip_'.$key_day     , $redis -> scard('DJ::user::active::ip_'.$key_day) ) ;
+        insert_redis_scalar( 'DJ::A::user::active::ip_'.$key_day  , $redis -> scard('DJ::user::active::ip_'.$key_day) ) ;
+        insert_redis_scalar( 'DJ::A::user::active::ip::weixin_'.$key_day , $redis->scard('DJ::user::active::ip::weixin_'.$key_day) ) ;
         insert_redis_scalar( 'DJ::A::user::active::device_'.$key_day , $redis -> scard('DJ::user::active::device_'.$key_day) ) ;
-        insert_redis_scalar( 'DJ::A::content::view_'.$key_day ,        $redis -> zcard('DJ::content::view_'.$key_day) ) ;
+        insert_redis_scalar( 'DJ::A::content::view_'.$key_day , $redis -> zcard('DJ::content::view_'.$key_day) ) ;
 
 }
 #=cut
-
 
 #=pod
 for ( 1 .. $num_month_ago )	
@@ -355,20 +360,48 @@ for ( 1 .. $num_month_ago )
         my $info = encode_json \%oses;
         insert_redis_scalar('DJ::A::user::active::os_'.$month , $info) ;
 }
-=cut
+#=cut
 
 
 # --------------------------
 # 设备留存率
 # --------------------------
 say "-> Redis.DJ::A::user::liucun* " ;
-for ( 1 .. $time_step+30 )
+for ( 1 .. $time_step )
 {
         my $days = $_ - 1;
         my $key_day = strftime("%Y-%m-%d", localtime(time() - 86400 * $days)) ;
+        say $key_day ;
+        my $day_t1  = strftime("%Y-%m-%d", localtime(time() - 86400 * ($days-1))) ;
+        my $day_t30 = strftime("%Y-%m-%d", localtime(time() - 86400 * ($days-30))) ;
+        # 次日留存
+        my @active = $redis->smembers('DJ::user::active::device_'.$day_t1) ;
+        my %actives;
+        $actives{$_} = 1 for @active ;
+        my @new = $redis->smembers('DJ::user::new::device_'.$key_day) ;
+        my @liucun = grep { exists $actives{$_} } @new ;
+        my $liucun1 ;
+        if (scalar(@liucun) == 0 or scalar(@new) == 0){
+                $liucun1 = 0 ;
+        }else{
+                $liucun1 = sprintf("%.4f" , scalar(@liucun) / scalar(@new) ) ;
+        }
+        insert_redis_scalar('DJ::A::user::liucun::1_'.$key_day , $liucun1) ;
         
-        my $day_t1 = strftime("%Y-%m-%d", localtime(time() - 86400 * ($days-1))) ;
+        # 30天留存
+        my %actives_30 ;
+        my @active_t30 = $redis->smembers('DJ::user::active::device_'.$day_t30) ;
+        $actives_30{$_} = 1 for @active_t30 ;
+        my @liucun_30 = grep { exists $actives_30{$_} } @new ;
+        my $liucun30 ;
+        if (scalar(@liucun_30) == 0 or scalar(@new) == 0){
+                $liucun30 = 0 ;
+        }else{
+                $liucun30 = sprintf("%.4f" , scalar(@liucun_30) / scalar(@new) ) ;
+        }
+        insert_redis_scalar('DJ::A::user::liucun::30_'.$key_day , $liucun30) ;
 }
+#=cut
 
 # =========================================  functions  ==========================================
 

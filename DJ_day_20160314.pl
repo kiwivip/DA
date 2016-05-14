@@ -43,6 +43,7 @@ my $time_step = 1 ;
 
 my $num_month_ago = $time_step / 30 + 1;
 
+# 日期映射，因为单天日志里面涵盖2个日期，所以需要处理日志时间
 my %num2month = (
 	'01' => "Jan" , '02' => "Feb" , '03' => "Mar" , '04' => "Apr" ,
 	'05' => "May" , '06' => "Jun" , '07' => "Jul" , '08' => "Aug" ,

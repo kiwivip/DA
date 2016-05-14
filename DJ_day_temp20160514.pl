@@ -43,6 +43,7 @@ my $time_step = 1 ;
 
 my $num_month_ago = $time_step / 30 + 1;
 
+# 日期映射，因为单天日志里面涵盖2个日期，所以需要处理日志时间
 my %num2month = (
 	'01' => "Jan" , '02' => "Feb" , '03' => "Mar" , '04' => "Apr" ,
 	'05' => "May" , '06' => "Jun" , '07' => "Jul" , '08' => "Aug" ,
@@ -124,9 +125,9 @@ for ( 1 .. $time_step + 1 )
         insert_redis_scalar('DJ::A::content::article_'.$key_day , $articles) if $articles ;
         
 }
-=cut
+#=cut
 
-=pod
+#=pod
 for ( 1 .. $num_month_ago)	
 {
         my $month_ago = $_ - 1 ;
@@ -153,8 +154,7 @@ for ( 1 .. $num_month_ago)
         insert_redis_scalar( 'DJ::A::content::article_'.$month , $articles ) ;
 }
 
-
-#=cut
+=cut
 
 #=pod
 # -------------------------------------------------------------------
@@ -184,7 +184,7 @@ for ( 1 .. $time_step)
         # access.pintimes.pin.news.log-20151030.gz
         my $file_name = $host.'/'.$logName.'.' .$log_day.'.log.gz' ;
         
-        next if $redis->get($file_name) == 1 ;  # if the log is scanned 
+        #next if $redis->get($file_name) == 1 ;  # if the log is scanned 
         
         my $file_log = '/home/RS/LOG/'.$file_name ;
         next unless -e $file_log ;
@@ -209,12 +209,12 @@ for ( 1 .. $time_step)
                 }
                 
                 # 记录用户在首页进行搜索时的关键字及搜索次数等
-                if ( $log =~ /\/api\/googlecustomer\/search\?searchStr=(.*?)&.*? HTTP/ ) {
-                        my $str = $1 ;
-                        $str =~ s/\%([A-Fa-f0-9]{2})/pack('C', hex($1))/seg ;  
-                        #say decode_utf8 $str ;
-                        $redis -> zincrby( 'DJ::content::google::str_'.$day_r , 1 , $str ) ;
-                }
+                #if ( $log =~ /\/api\/googlecustomer\/search\?searchStr=(.*?)&.*? HTTP/ ) {
+                #        my $str = $1 ;
+                #        $str =~ s/\%([A-Fa-f0-9]{2})/pack('C', hex($1))/seg ;  
+                #        say decode_utf8 $str ;
+                #        $redis -> zincrby( 'DJ::content::google::str_'.$day_r , 1 , $str ) ;
+                #}
                 
                
                 # 记录用户的ip和操作系统
@@ -237,6 +237,11 @@ for ( 1 .. $time_step)
                                 $os = $ua -> {os};
                         }
                         $redis -> sadd( 'DJ::user::active::ip_'.$day_r , $ip.'_'.$os ) ;
+                        
+                        if ( $log =~ /MicroMessenger/i ) {
+                                $redis -> sadd( 'DJ::user::active::ip::weixin_'.$day_r , $ip.'_'.$os ) ;
+                        }
+                        
                 }
                 
                 # 记录活跃设备
@@ -246,26 +251,27 @@ for ( 1 .. $time_step)
                 }
                 
                 # 记录文章阅读数，自增，注意回滚时这个部分要注释掉
-                if ($log =~ /content\/view.*?content_id=(\d+) HTTP/)
-                {
-                        my $contentId = $1 ;
-                        $redis -> zincrby( 'DJ::content::view_'.$day_r , 1 , $contentId ) ;
-                }
+                #if ($log =~ /content\/view.*?content_id=(\d+)/)
+                #{
+                #        my $contentId = $1 ;
+                #        $redis -> zincrby( 'DJ::content::view_'.$day_r , 1 , $contentId ) ;
+                #}
              
         } # end of while(<$fh_log>)
         
         $redis -> set($file_name , 1) ;  # the log is scanned
     } # end of for(keys %hosts)
     
-        insert_redis_scalar( 'DJ::A::user::active::ip_'.$key_day     , $redis -> scard('DJ::user::active::ip_'.$key_day) ) ;
+        insert_redis_scalar( 'DJ::A::user::active::ip_'.$key_day  , $redis -> scard('DJ::user::active::ip_'.$key_day) ) ;
+        insert_redis_scalar( 'DJ::A::user::active::ip::weixin_'.$key_day , $redis->scard('DJ::user::active::ip::weixin_'.$key_day) ) ;
         insert_redis_scalar( 'DJ::A::user::active::device_'.$key_day , $redis -> scard('DJ::user::active::device_'.$key_day) ) ;
-        insert_redis_scalar( 'DJ::A::content::view_'.$key_day ,        $redis -> zcard('DJ::content::view_'.$key_day) ) ;
+        insert_redis_scalar( 'DJ::A::content::view_'.$key_day , $redis -> zcard('DJ::content::view_'.$key_day) ) ;
 
 }
 #=cut
 
 
-#=pod
+=pod
 for ( 1 .. $num_month_ago )	
 {
         my $month_ago = $_ - 1 ;
@@ -355,7 +361,7 @@ for ( 1 .. $num_month_ago )
         my $info = encode_json \%oses;
         insert_redis_scalar('DJ::A::user::active::os_'.$month , $info) ;
 }
-=cut
+#=cut
 
 
 # --------------------------
@@ -396,6 +402,7 @@ for ( 1 .. $time_step )
         }
         insert_redis_scalar('DJ::A::user::liucun::30_'.$key_day , $liucun30) ;
 }
+=cut
 
 # =========================================  functions  ==========================================
 
