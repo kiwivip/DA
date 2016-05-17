@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 # 请确保Linux已经配置好cpanm工具：
 # curl -L http://cpanmin.us | perl - --sudo App::cpanminus
-
+# test
 use 5.10.1 ;
 
 BEGIN {

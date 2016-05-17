@@ -318,7 +318,7 @@ for ( 1 .. $time_step + 1 )
 		$sth_recharge -> finish ;
 		
         # 充值的支付渠道各金额
-        my $channel_info = decode_utf8 encode_json \%channel;
+        my $channel_info = encode_json \%channel;
         insert_redis_scalar('CBS::A::payin::recharge::channel_'.$key_day , $channel_info );
         
 }

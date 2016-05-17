@@ -23,12 +23,12 @@ $| = 1;
 # ---------------------------------------------------------
 # 文件锁实现确保计划任务下的进程单实例，注意main段最后需要remove
 # ---------------------------------------------------------
-my $lockfile = File::Lockfile->new('cbs.lock' , '/home/DA/DataAnalysis');
-if ( my $pid = $lockfile->check ) {
-        say "Seems that program is already running with PID: $pid";
-        exit;
-}
-$lockfile->write;
+#my $lockfile = File::Lockfile->new('cbs.lock' , '/home/DA/DataAnalysis');
+#if ( my $pid = $lockfile->check ) {
+#        say "Seems that program is already running with PID: $pid";
+#        exit;
+#}
+#$lockfile->write;
 
 # -----------------------------------------------------------------------
 # read config.ini
@@ -92,7 +92,7 @@ my %robots ;
 open my $fh_robot, '<:utf8' , $file_robot ;
 while (<$fh_robot>) { chomp ; $robots{$_} = 1 ; }
 
-#=pod
+=pod
 
 # --------------------------------------------------
 # 记录猜比赛付费的用户
@@ -215,7 +215,7 @@ for ( 1 .. $num_month_ago )
 
 	insert_redis_hash(\%user_new_month) ;
 }
-#=cut
+=cut
 
 #=pod
 # ---------------------------------------------
@@ -318,13 +318,13 @@ for ( 1 .. $time_step + 1 )
 		$sth_recharge -> finish ;
 		
         # 充值的支付渠道各金额
-        my $channel_info = decode_utf8 encode_json \%channel;
+        my $channel_info = encode_json \%channel;
         insert_redis_scalar('CBS::A::payin::recharge::channel_'.$key_day , $channel_info );
         
 }
 #=cut
 
-#=pod
+=pod
 #  goods表的映射
 say "-> Redis.CBS::payin::mall::N_TIME" ;
 for ( 1 .. $time_step + 1)
@@ -960,7 +960,7 @@ for ( 1 .. $num_month_ago )
 }
 
 $lockfile->remove;      # 删除开头为了实现单实例进程而创建的文件锁
-#=cut
+=cut
 
 # ==================================== functions =========================================
 
