@@ -1,27 +1,9 @@
 #!/usr/bin/env perl 
 # ==============================================================================
-# function:	*
-# Author: 	kiwi
+# Author: 	    kiwi
 # createTime:	2014.6.30
 # ==============================================================================
-
-use 5.10.1 ;						# Ubuntu 12.04LTS 默认版本
-BEGIN {
-    # 如果程序迁移到新机器，需要 Linux 预配好 cpanm ，然后解掉注释
-    my @PMs = (
-            #'Config::Tiny',
-            #'Unicode::UTF8'
-	) ;
-    foreach(@PMs){
-            my $pm = $_ ;
-            eval {require $pm;};
-            if ($@ =~ /^Can't locate/) {
-                    print "install module $pm";
-                    `cpanm $pm`;
-            }
-    }
-}
-
+use 5.10.1 ;
 use utf8 ;
 use autodie ;
 use Data::Dumper ;

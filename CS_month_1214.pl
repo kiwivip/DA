@@ -4,27 +4,7 @@
 # Author:		kiwi
 # createTime:	2015.4.7
 # ==============================================================================
-use 5.10.1 ;
-
-BEGIN {
-        my @PMs = (
-		   #'Redis' ,
-		   #'Config::Tiny' ,
-		   #'DBI' ,
-		   #'JSON::XS' ,
-		   #'Date::Calc::XS' ,
-		   #'Time::Local'
-	) ;
-        foreach(@PMs){
-                my $pm = $_ ;
-                eval {require $pm;};
-                if ($@ =~ /^Can't locate/) {
-                        print "install module $pm";
-                        `cpanm $pm`;
-                }
-        }
-}
-
+use 5.10.1 ;            # with CentOS 6.4
 use utf8 ;
 use Redis;
 use MongoDB;

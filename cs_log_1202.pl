@@ -5,23 +5,6 @@
 # createTime: 2014.6.5
 # ==============================================================================
 use 5.10.1 ;
-
-BEGIN {
-        my @PMs = (
-		   #'Config::Tiny' ,
-		   #'JSON::XS' ,
-		   #'Date::Calc::XS'
-	) ;
-        foreach(@PMs){
-                my $pm = $_ ;
-                eval {require $pm;};
-                if ($@ =~ /^Can't locate/) {
-                        print "install module $pm";
-                        `cpanm $pm`;
-                }
-        }
-}
- 
 use utf8 ;
 use Redis;
 use MongoDB;

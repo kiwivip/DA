@@ -6,22 +6,6 @@
 # ==============================================================================
 
 use 5.10.1 ;
-BEGIN {
-    # 如果程序迁移到新机器，需要 Linux 预配好 cpanm ，然后解掉注释
-    my @PMs = (
-            #'Config::Tiny',
-            #'Unicode::UTF8'
-	) ;
-    foreach(@PMs){
-            my $pm = $_ ;
-            eval {require $pm;};
-            if ($@ =~ /^Can't locate/) {
-                    print "install module $pm";
-                    `cpanm $pm`;
-            }
-    }
-}
-
 use utf8 ;
 use autodie ;
 use Data::Dumper ;
