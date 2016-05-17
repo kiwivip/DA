@@ -5,24 +5,6 @@
 # createTime:	2014.6.18
 # ==============================================================================
 use 5.10.1 ;
-
-BEGIN {
-        my @PMs = (
-		   #'Config::Tiny' ,
-		   #'Date::Calc::XS' ,
-           #'File::Lockfile' ,
-        ) ;
-        foreach(@PMs)
-        {
-                my $pm = $_ ;
-                eval {require $pm;};
-                if ($@ =~ /^Can't locate/) {
-                        print "install module $pm";
-                        `cpanm $pm`;
-                }
-        }
-}
-
 use utf8 ;
 use Redis;
 use Config::Tiny ;
@@ -38,7 +20,6 @@ binmode(STDOUT, ':encoding(utf8)');
 binmode(STDERR, ':encoding(utf8)');
 
 $| = 1;
-
 # ---------------------------------------------------------
 # 文件锁实现确保计划任务下的进程单实例，注意main段最后需要remove
 # ---------------------------------------------------------
@@ -55,7 +36,7 @@ $lockfile->write;
 my $Config = Config::Tiny->new;
 $Config = Config::Tiny->read( '/home/DA/DataAnalysis/config.ini', 'utf8' );
 
-#my $time_step = 500 ;
+#my $time_step = 50 ;
 my $time_step = $Config -> {time} -> {step} ;		# 往前回滚N天，默认 N = 1 
 
 my $L06_host      = $Config -> {L06_DB} -> {host};
@@ -100,10 +81,6 @@ my $dsn_v506 = "DBI:mysql:database=$L06_db;host=$L06_host" ;
 my $dbh_v506 = DBI -> connect($dsn_v506, $L06_usr, $L06_password, {'RaiseError' => 1} ) ;
 $dbh_v506 -> do ("SET NAMES UTF8");
 
-my $dsn_user  = "DBI:mysql:database=$CBS_db_user;host=$CBS_host" ;
-my $dbh_user = DBI -> connect($dsn_user, $CBS_usr, $CBS_password, {'RaiseError' => 1} ) ;
-$dbh_user -> do ("SET NAMES UTF8");
-
 my $dsn_new  = "DBI:mysql:database=$CBS_db_user;host=$CBS_host;port=$CBS_port1" ;
 my $dbh_new = DBI -> connect($dsn_new, $CBS_usr1, $CBS_password1, {'RaiseError' => 1} ) ;
 $dbh_new -> do ("SET NAMES UTF8");
@@ -114,6 +91,8 @@ $dbh_new -> do ("SET NAMES UTF8");
 my %robots ;
 open my $fh_robot, '<:utf8' , $file_robot ;
 while (<$fh_robot>) { chomp ; $robots{$_} = 1 ; }
+
+#=pod
 
 # --------------------------------------------------
 # 记录猜比赛付费的用户
@@ -248,20 +227,23 @@ for ( 1 .. $time_step + 1 )
 {
 		my $days_step = $_ - 1 ;
 		my $key_day = strftime("%Y-%m-%d", localtime(time() - 86400 * $days_step)) ;
-		say "\t $key_day" ;
+		say "\t $key_day" ;             # 打印当前正在统计的日期
 		
 		my $timestamp_l = local2unix($key_day.' 00:00:00')  ;
 		my $timestamp_r = local2unix($key_day.' 23:59:59')  ;
 		
+        my %channel ;                   # 存储各渠道的充值金额
+        my $type_recharge ;
+        
 		my $sth_recharge = $dbh_v506 -> prepare("
-										SELECT logId,accountId,userMoney,changeType,changeDesc,changeTime
-										FROM
-										pay_account_log
-										WHERE
-										changeType in (31,32,33,34,38)
-										and
-										changeTime between $timestamp_l and $timestamp_r
-										") ;
+				SELECT logId,accountId,userMoney,changeType,changeDesc,changeTime
+                FROM
+				pay_account_log
+				WHERE
+				changeType in (31,32,33,34,38)
+				and
+				changeTime between $timestamp_l and $timestamp_r
+		") ;
 		$sth_recharge -> execute();
 		while (my $ref = $sth_recharge -> fetchrow_hashref())
 		{
@@ -278,6 +260,19 @@ for ( 1 .. $time_step + 1 )
 				if   ($changeType == 31 )									
 				{
 					$pay_type = 'recharge'  if $changeDesc =~ /充值/ ;
+                    
+                    # 各充值支付渠道
+                    if ($changeDesc =~ /微信支付/) {
+                            $type_recharge = 'weixin' ;
+                    }
+                    elsif($changeDesc =~ /支付宝/){
+                            $type_recharge = 'zfb' ;
+                    }
+                    elsif($changeDesc =~ /#thing/){
+                            $type_recharge = '#' ;
+                    }
+                    
+                    $channel{$type_recharge} += $userMoney ;
 				}
 				elsif($changeType == 32 )
 				{
@@ -298,7 +293,7 @@ for ( 1 .. $time_step + 1 )
 					$pay_type = 'bet::win' if $changeDesc =~ /下注结算/ ;
 					$pay_type = 'exchange' if $changeDesc =~ /龙筹兑换/ ;
 				}	
-				
+				     
 				next unless $pay_type ;
 				my $redis_key = 'CBS::payin::'.$pay_type.'::user::'.$accountId . '::uuid::' . $logId . '_' .$time ;
 				
@@ -319,6 +314,10 @@ for ( 1 .. $time_step + 1 )
 		}
 		$sth_recharge -> finish ;
 		
+        # 充值的支付渠道各金额
+        my $channel_info = decode_utf8 encode_json \%channel;
+        insert_redis_scalar('CBS::A::payin::recharge::channel_'.$key_day , $channel_info );
+        
 }
 #=cut
 
@@ -330,31 +329,26 @@ for ( 1 .. $time_step + 1)
 	my $days_step = $_ - 1 ;
 	my $key_day = strftime("%Y-%m-%d", localtime(time() - 86400 * $days_step)) ;
 	
-	
-	my $sth = $dbh_new -> prepare("
-								   SELECT id,name,price
-								   FROM 
-								   cbs_mall_goods
-	");
+	my $sth = $dbh_new -> prepare(" SELECT id,name,price FROM cbs_mall_goods ");
 	$sth -> execute();
 	while (my $ref = $sth -> fetchrow_hashref())
 	{
 		my %temp ;
-		my $id    = $ref -> {id} ;
+		my $id = $ref -> {id} ;
 		$temp{price} = $ref -> {price} ;
 		$temp{name}  = decode_utf8 $ref -> {name} ;
-		
 		my $info = encode_json \%temp ;
 		insert_redis_scalar('CBS::payin::mall::'.$id.'_'.$key_day , $info) ;
 	}
-	
+	$sth -> finish ;
 }
 #=cut
 
 #=pod
-# -------------------------------------------------------------
+# -------------------------------------------------------------------
 # 用户兑换礼品
-# -------------------------------------------------------------
+# status: 0未付款   1未发货（已付款）  2未确认（已发货）  3已完成   10取消
+# -------------------------------------------------------------------
 say "-> Redis.CBS::payin::mall*_TIME " ;
 for ( 1 .. $time_step + 1)
 {
@@ -368,7 +362,7 @@ for ( 1 .. $time_step + 1)
 								   cbs_mall_order
 								   WHERE
 								   createTime between '$key_day 00:00:00' and '$key_day 23:59:59'
-								   and status = 1
+								   and status between 1 and 3
 								");
 	$sth -> execute();
 	while (my $ref = $sth -> fetchrow_hashref())
@@ -387,14 +381,15 @@ for ( 1 .. $time_step + 1)
 		my $redis_key = 'CBS::payin::mall::user::'.$accountId . '::uuid::' . $orderId . '_' .$time ;
 		
 		$redis_db2 -> sadd( 'CBS::payin::mall::uv_'.$key_day , $accountId ) ;
-		
+		$temp{'CBS::A::payin::mall::times_'.$key_day} ++ ;
+		$temp{'CBS::A::payin::mall::'.$itemId.'::times_'.$key_day} ++ ;
+		$temp{'CBS::A::payin::mall_'.$key_day} += $amount ;
+        
 		$redis_db2 -> exists( $redis_key ) && next ;
 		$redis_db2 -> set($redis_key , $userMoney);
 		say "Redis_db2: $redis_key => $userMoney" ;
 		
-		$temp{'CBS::A::payin::mall::times_'.$key_day} ++ ;
-		$temp{'CBS::A::payin::mall::'.$itemId.'::times_'.$key_day} ++ ;
-		$temp{'CBS::A::payin::mall_'.$key_day} += $amount ;
+		
 	}
 	
 		$sth -> finish();
@@ -444,7 +439,7 @@ for ( 1 .. $time_step + 1)
 				$pay_user{'CBS::A::payin::'.$pay_type.'::user::'.$id.'_'.$key_day}  += $pay ;
                 $pay{'CBS::A::payin::recharge::withrobot::uv_'.$key_day} ++ if $pay_type eq 'recharge' ;
                 
-				my $ref_account = get_user_from_accountId($dbh_user , $id) ;
+				my $ref_account = get_user_from_accountId($dbh_new , $id) ;
 				my ($l99NO,$gender,$name) = ($ref_account->{l99NO} , $ref_account->{gender} , $ref_account->{name}) ;
 				my $version = $ref_user_version -> {$l99NO} ;
 				my $market  = $ref_user_market  -> {$l99NO} ;
@@ -494,7 +489,7 @@ for ( 1 .. $time_step + 1)
                 
                 $pay{'CBS::A::payin::recharge::uv_'.$key_day} ++ if $pay_type eq 'recharge' ;
                 
-				my $ref_account = get_user_from_accountId($dbh_user , $id) ;
+				my $ref_account = get_user_from_accountId($dbh_new , $id) ;
 				my ($l99NO,$gender,$name) = ($ref_account->{l99NO} , $ref_account->{gender} , $ref_account->{name}) ;
 				my $version = $ref_user_version -> {$l99NO} ;
 				my $market  = $ref_user_market  -> {$l99NO} ;
@@ -544,7 +539,6 @@ for ( 1 .. $time_step + 1)
 					insert_redis_scalar( 'CBS::A::'.$type.'::avg_'.$key_day , $avg ) if $avg ;
 				}
 		}
-		
 		
 }
 #=cut
@@ -609,24 +603,26 @@ for ( 1 .. $num_month_ago)
 #=cut
 
 #=pod
-# --------------------
+# ---------------------------------------
 # 重复付费率／充值率
-# --------------------
+# ---------------------------------------
 say "-> Redis.CBS::A::payin::rate2_DAY" ;
 for ( 1 .. $time_step)
 {
 		my $days_step = $_ - 1 ;
 		my $key_day = strftime("%Y-%m-%d", localtime(time() - 86400 * $days_step)) ;
-		$redis -> exists( 'CBS::A::payin::rate2_'.$key_day ) && next ;			# 有值了就跳过这天的，如果需要回滚操作请注释
+		#$redis -> exists( 'CBS::A::payin::rate2_'.$key_day ) && next ;			# 如果需要回滚操作请注释
 		
         # 付费率 ＝ 付费人数 ／ 活跃用户数
 		my $uv_pay = $redis->get('CBS::A::payin::uv_'.$key_day) ;
 		my $uv_active = $redis_storm->get('CBS::A::user::active_'.$key_day) ;
 		my $rate = sprintf("%.4f" , $uv_pay / $uv_active ) if $uv_active;
+        $rate = 1 if $uv_pay > $uv_active ;
 		insert_redis_scalar('CBS::A::payin::rate_'.$key_day , $rate ) if $rate ;
         
-        my $uv_pay_withrobot = $redis->get('CBS::payin::withrobot::uv_'.$key_day) ;
+        my $uv_pay_withrobot = $redis->get('CBS::A::payin::withrobot::uv_'.$key_day) ;
         my $rate_withrobot = sprintf("%.4f" , $uv_pay_withrobot / $uv_active ) if $uv_active;
+        $rate_withrobot = 1 if $uv_pay_withrobot > $uv_active ;
 		insert_redis_scalar('CBS::A::payin::withrobot::rate_'.$key_day , $rate_withrobot ) if $rate_withrobot ;
 		
 		# 充值率 ＝ 充值人数 ／ 活跃用户数
@@ -746,7 +742,7 @@ for ( 1 .. $time_step+1 )
 			}
 		} # END for(@ops)
 		
-		# 足球，这里逻辑和篮球是一样的，为了防止有足球独特的需求后面又改，这里还是copy了一遍，臃肿就臃肿吧
+		# 足球，这里逻辑和篮球是一样的，分开写是为足球玩法后续出现不同于篮球的业务
 		for(@ops)
 		{
 			my $op = $_ ;   # jc / op
@@ -899,6 +895,7 @@ for ( 1 .. $time_step+1 )
 		
 		insert_redis_hash(\%temp) ;
 		
+        # 各种下注的人数
 		foreach( $redis_db2 -> keys( 'CBS::payin::bet::*::uv_'.$key_day ) )
 		{
 				my $k = $_ ;
@@ -959,7 +956,7 @@ for ( 1 .. $num_month_ago )
 	
 }
 
-$lockfile->remove;
+$lockfile->remove;      # 删除开头为了实现单实例进程而创建的文件锁
 #=cut
 
 # ==================================== functions =========================================
