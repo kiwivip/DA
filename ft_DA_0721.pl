@@ -1,28 +1,9 @@
 #!/usr/bin/env perl 
 # ==============================================================================
-# function:	*
-# Author: 	kiwi
+# Author: 	    kiwi
 # createTime:	2014.10.31
 # ==============================================================================
-
 use 5.10.1 ;
-BEGIN {
-    # 如果程序迁移到新机器，需要 Linux 预配好 cpanm ，然后解掉注释
-    my @PMs = (
-	    #'MaxMind::DB::Reader',
-            #'Config::Tiny',
-            #'Unicode::UTF8'
-	) ;
-    foreach(@PMs){
-            my $pm = $_ ;
-            eval {require $pm;};
-            if ($@ =~ /^Can't locate/) {
-                    print "install module $pm";
-                    `cpanm $pm`;
-            }
-    }
-}
-
 use utf8 ;
 use Data::Dumper ;
 use MaxMind::DB::Reader ;
@@ -53,7 +34,7 @@ my $mongo_host = $Config -> {MONGODB} -> {host};
 my $mongo_port = $Config -> {MONGODB} -> {port};
 
 my $log_dir_FT = $Config -> {FT} -> {log_dir} ;         # 第一次 APP应用日志路径
-my $file_team  = $Config -> {FT} -> {team_file} ;	# 公司同事的龙号/acoountId 文本
+my $file_team  = $Config -> {FT} -> {team_file} ;	    # 公司同事的龙号/acoountId 文本
 
 my $L06_host     = $Config -> {L06_DB} -> {host};
 my $L06_db       = $Config -> {L06_DB} -> {database} ;
@@ -65,7 +46,7 @@ my $FT_db        = $Config -> {FT_DB} -> {database} ;
 my $FT_usr       = $Config -> {FT_DB} -> {username} ;
 my $FT_password  = $Config -> {FT_DB} -> {password};
 
-my $time_step = $Config -> {time} -> {step} ;		# 设置为往前推 N天 统计，默认 N = 1 ;
+my $time_step = $Config -> {time} -> {step} ;		    # 设置为往前推 N天 统计，默认 N = 1 ;
 my $timestamp_now = int scalar time ;
 my $timestamp_start = $timestamp_now - 86400 * $time_step  ;
 my $day_yest  = strftime("%Y-%m-%d",localtime(time() - 86400 ));
