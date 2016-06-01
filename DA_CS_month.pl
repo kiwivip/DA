@@ -4,27 +4,7 @@
 # Author:		kiwi
 # createTime:	2015.4.7
 # ==============================================================================
-use 5.10.1 ;
-
-BEGIN {
-        my @PMs = (
-		   #'Redis' ,
-		   #'Config::Tiny' ,
-		   #'DBI' ,
-		   #'JSON::XS' ,
-		   #'Date::Calc::XS' ,
-		   #'Time::Local'
-	) ;
-        foreach(@PMs){
-                my $pm = $_ ;
-                eval {require $pm;};
-                if ($@ =~ /^Can't locate/) {
-                        print "install module $pm";
-                        `cpanm $pm`;
-                }
-        }
-}
-
+use 5.10.1 ;            # with CentOS 6.4
 use utf8 ;
 use Redis;
 use MongoDB;
@@ -64,8 +44,8 @@ my $CS_db_comment= $Config -> {CS_DB}  -> {database_comment} ;
 my $CS_log_dir   = $Config -> {CS_LOG} -> {dir} ;
 my $article_topN = $Config -> {CS_LOG} -> {topN} ;
 
-my $time_step = 1000 ;
-#my $time_step = $Config -> {time} -> {step} ;
+#my $time_step = 5 ;
+my $time_step = $Config -> {time} -> {step} ;
 my $num_month_ago = $time_step / 30 + 1;
 
 my $redis = Redis->new(server => "$redis_host:$redis_port",reconnect => 10, every => 2000);
@@ -83,7 +63,7 @@ my $dsn_v506 = "DBI:mysql:database=$L06_db;host=$L06_host" ;
 my $dbh_v506 = DBI -> connect($dsn_v506, $L06_usr, $L06_password, {'RaiseError' => 1} ) ;
 $dbh_v506 -> do ("SET NAMES UTF8");
 
-=pod
+#=pod
 say '-> Redis.CS::A::user::new::auth_MONTH' ;
 
 for ( 1 .. $num_month_ago )	
@@ -193,7 +173,6 @@ for ( 1 .. $num_month_ago )
 	}
 	
 } 
-=cut
 
 #=pod
 # ---------------------------------------------------------------------------------------
@@ -222,7 +201,6 @@ for ( 1 .. $num_month_ago)	# 往前取几个月
 	insert_redis_scalar('CS::A::content::guide_'.$month , $guide_info) ;
 }
 
-=pod
 say "-> Redis.CS::A::content::*_MONTH" ;
 for ( 1 .. $num_month_ago)
 {
@@ -429,7 +407,7 @@ for ( 1 .. $num_month_ago)
 
 }
 
-=cut
+#=cut
 
 
 # =========================================  functions  ==========================================
