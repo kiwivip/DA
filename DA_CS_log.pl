@@ -1,6 +1,5 @@
 #!/usr/bin/env perl 
 # ==============================================================================
-# function:	*
 # Author: 	kiwi
 # createTime: 2014.6.5
 # ==============================================================================
@@ -29,17 +28,14 @@ $Config = Config::Tiny->read( '/home/DA/DataAnalysis/config.ini', 'utf8' );
 my $version = $Config -> {_} -> {version};
 
 my $CS_log_dir   = $Config -> {CS_LOG} -> {dir} ;
-
 my $redis_host = $Config -> {REDIS} -> {host};
 my $redis_port = $Config -> {REDIS} -> {port};
 my $mongo_host = $Config -> {MONGODB} -> {host};
 my $mongo_port = $Config -> {MONGODB} -> {port};
 
-#my $time_step = 5 ;
 my $time_step = $Config -> {time} -> {step} ;			        # 设置为往前推 N天 统计，默认 N = 1 ;
 my $timestamp_now = int scalar time ;
 my $timestamp_start = $timestamp_now - 86400 * $time_step  ;			
-#my $time = strftime("%Y-%m-%d %H:%M:%S", localtime(time));
 my $today = strftime("%Y-%m-%d", localtime(time));
 my $day_start = strftime( "%Y-%m-%d 00:00:00" , localtime(time() - 86400 * $time_step) );
 
@@ -54,6 +50,7 @@ my $redis_active = Redis->new(server => "192.168.201.57:6379",reconnect => 10, e
 
 my $database_cs = $mongo -> get_database( 'cs' );
 my $collection_user = $database_cs -> get_collection( 'user' );
+
 #=pod
 # ----------------------------------------------------------------------
 # 活跃用户 & 用户文章阅读记录
@@ -214,17 +211,6 @@ my %apps ;
 		'Game' => '2138b3ad0eb042656892c825'
 ) ;
 
-#my $analytics_html = $ua->max_redirects(3)->get('http://www.umeng.com/analytics' => {DNT => 1})->res->body  ;
-#my ($href,$iOS_app_id) = $analytics_html =~ /<div class="link clearfix">[\s\S]*?<a href="(\/apps\/([a-zA-Z0-9]+)\/reports)"/ ;
-#$apps{iOS} = $iOS_app_id ;
-#my $url = 'www.umeng.com' . $href . '/benchmark' ;
-#my $apps_html = $ua->max_redirects(3)->get($url => {DNT => 1})->res->body  ;
-#
-#while ($apps_html =~ /<li app_id="([a-zA-Z0-9]+)">([\s\S]*?)<\/li>/g){
-#    my ($app_id,$temp) = ($1,$2) ;
-#    $apps{Android} = $app_id if $temp =~ /Android/ ;
-#    $apps{Game}    = $app_id if $temp =~ /Game/ ;
-#}
 
 foreach(keys %apps)
 {
@@ -258,7 +244,5 @@ sub insert_redis_scalar
     $redis->set($rediskey,$redisvalue);
     say "$rediskey => $redisvalue" ;
 }
-
-=pod
-$redis -> incr($key);
-$redis -> rpush($key , $value);
+#$redis -> incr($key);
+#$redis -> rpush($key , $value);
